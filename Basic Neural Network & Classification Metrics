@@ -1,0 +1,61 @@
+import pandas as pd
+import numpy as np
+import sklearn
+from sklearn.neural_network import MLPClassifier
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler, OneHotEncoder
+from sklearn import datasets
+
+# Import that dataset
+iris=sklearn.datasets.load_iris()
+
+## save the features and class
+features=iris.data   	# split iris dataset into features and iris_class
+iris_class=iris.target  # class[X] is output corresponding to features[X]
+
+
+## TTS and shuffle datapoints
+
+print("Splitting the data into testing and training samples")
+from sklearn.model_selection import train_test_split
+ratio_train, ratio_test = 0.7 , 0.3
+features_train, features_test,iris_class_train, iris_class_test = train_test_split(features,iris_class, train_size = ratio_train,test_size = ratio_test, shuffle=True)
+
+## data preprocessing: Before training the network we must scale the feature data
+print("Data preprocessing")
+from sklearn.preprocessing import StandardScaler
+scaler = StandardScaler()
+scaler.fit(features_train)
+features_train_scale = scaler.transform(features_train)
+features_test_scale = scaler.transform(features_test)
+
+## Train Neural Net with 3 hidden layers (10 neurons in each)
+from sklearn.neural_network import MLPClassifier
+iterations=1000   # define the iterations for training over the dataset
+hidden_layers=[10,10,10]  # define the layers/depth of the NN
+
+mlp = MLPClassifier(hidden_layer_sizes=(hidden_layers), max_iter=iterations) 
+
+# Fit the Neural Net
+mlp.fit(features_train_scale, iris_class_train)  
+
+## Run the test data over the network to see the predicted outcomes.
+predicted = mlp.predict(features_test_scale)  
+
+# predict over test data
+print("Evaluation: considering the confusion matrix")
+
+#Classify and Create a confusion matrix
+from sklearn.metrics import confusion_matrix
+from sklearn.metrics import classification_report
+from sklearn.metrics import accuracy_score
+
+print(confusion_matrix(iris_class_test, predicted))  
+
+print("Evaluation report:")
+print(classification_report(iris_class_test, predicted)) 
+
+print(accuracy_score(iris_class_test, predicted))
+
+# Inspired by https://github.com/CristiVlad25/ml-sklearn/blob/master/Machine%20Learning%20with%20Scikit-Learn%20-%20The%20Cancer%20Dataset%20-%2021%20-%20Neural%20Networks%203.ipynb
+

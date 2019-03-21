@@ -237,10 +237,10 @@ myleg = plt.legend()
 plt.show()
 
 #Estimate the best C value between CV and Test datasets
-smallest_C_cv = myErrors.index(min(myErrors, key=int))
-smallest_C_test = myErrors_train.index(min(myErrors_train, key=int))
+C_values = [k + l for k, l in zip(myErrors, myErrors_train)] #sum together lists
+smallest_C = C_values.index(min(C_values, key=int)) #find index of min value
 
-smallest_C = myCs[int((smallest_C_cv + smallest_C_test) / 2)]
+smallest_C = myCs[int(smallest_C)] #find C value at the lowest index
 
 # 6 Compute test predictions  ------------
 best_svm = svm.SVC(C=smallest_C, kernel='linear')

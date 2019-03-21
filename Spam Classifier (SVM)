@@ -1,0 +1,260 @@
+import matplotlib.pyplot as plt
+import numpy as np
+import os
+from scipy.io import loadmat
+import re
+import nltk, nltk.stem.porter
+from collections import Counter
+from sklearn.model_selection import train_test_split
+from sklearn import svm
+
+
+# 1 Read in Spam and Non-Spam Emails -------------------------------------
+
+#Set directory on my PC
+data_dir = 'C:/Users/delis/Documents/'
+
+#data = loadmat(os.path.join('Data', 'C:/Users/delis/Desktop/temp/ex6/spamTrain.mat'))
+#X, y= data['X'].astype(float), data['y'][:, 0]
+
+#Read in spam and non-spam emails as arrays. Specify they're utf-8 encoded and skip errors
+nonspam_emails = []
+for nonspam_email in os.listdir(data_dir + 'not_spam/'):
+    nonspam_emails.append(open(data_dir + 'not_spam/' + nonspam_email, 'r', encoding='utf-8', errors='replace').read()) #encoding errors are replaced, not ignored IMP
+
+spam_emails = []
+for spam_email in os.listdir(data_dir + 'spam/'):
+    spam_emails.append(open(data_dir + 'spam/' + spam_email, 'r', encoding='utf-8', errors='replace').read())
+
+
+#print(nonspam_emails[1])
+
+# 2 Format and Simplify Email Text -----------------------------------------
+
+#Search for double new-lines
+for nonspam_email in nonspam_emails:
+    if "\n\n" not in nonspam_email:
+        print("Non Spam Email: No Double New-Lines")
+        print(nonspam_email[:300]) #print first 300 words of non-spam email without double newlines
+
+for spam_email in spam_emails:
+    if "\n\n" not in spam_email:
+        print("Spam Email: No Double New-Lines")
+        print(spam_email[:300])
+
+#Delete the header in each email
+nonspam_emails = [email[email.find('\n\n')+4:] for email in nonspam_emails] #Find the index+4 of the first double newline occurance
+spam_emails    = [email[email.find('\n\n')+4:] for email in spam_emails]
+#print(spam_emails[0][:300])
+
+#Function to simplify email text using reg expressions
+def preProcess(email):
+    
+    #print(email[1])
+
+    # Make the entire e-mail lower case
+    email = email.lower()
+
+    # Strip html tags (strings that look like <blah> where 'blah' does not contain '<' or '>')... replace with a space
+    email = re.sub('<[^<>]+>', ' ', email)
+    
+    #Any numbers get replaced with the string 'number'
+    email = re.sub('[0-9]+', 'number', email)
+
+    #Anything starting with http or https:// replaced with 'httpaddr'
+    email = re.sub('(http|https)://[^\s]*', 'httpaddr', email)
+    
+    #Strings with "@" in the middle are considered emails --> 'emailaddr'
+    email = re.sub('[^\s]+@[^\s]+', 'emailaddr', email)
+
+    #The '$' sign gets replaced with 'dollar'
+    email = re.sub('[$]+', 'dollar', email)
+    
+    return email
+
+#For each email, this function will make each word a separate string (tokenized), 
+#then each word is stemmed using NLT, and a list containing stemmed words is returned.
+def email2TokenList(raw_email):
+
+    stemmer = nltk.stem.porter.PorterStemmer()
+    
+    email = preProcess(raw_email)
+
+    #Split the e-mail into individual words (tokens) (split by the delimiter ' ', @', '$', '/', etc.)
+    tokens = re.split('[ \@\$\/\#\.\-\:\&\*\+\=\[\]\?\!\(\)\{\}\,\'\"\>\_\<\;\%]', email)
+    
+    #Loop over each word (token) and use a stemmer to shorten it,
+    tokenlist = []
+    for token in tokens:
+        
+        #Remove any non alphanumeric characters
+        token = re.sub('[^a-zA-Z0-9]', '', token)
+
+        #Use the Porter stemmer to stem the word
+        stemmed = stemmer.stem( token )
+        
+        #Throw out empty tokens
+        if not len(token): continue
+            
+        #Store a list of all stemmed words
+        tokenlist.append(stemmed)
+            
+    return tokenlist
+
+#Concatenate all emails to form one giant email
+giant_nonspam_email = [ ' '.join(nonspam_emails[:]) ]
+giant_spam_email    = [ ' '.join(spam_emails[:])    ]
+giant_total_email   = giant_nonspam_email[0] + giant_spam_email[0]
+
+# 3 Convert emails into SVM-readable dictionaries --------------------- 
+
+#Tokenize and stem the giant email, then count the most common tokens (using the 'collections' library)
+word_counts = Counter(email2TokenList(giant_total_email))
+
+print('The total number of unique stemmed tokens is:', len(word_counts))
+print('The ten most common stemmed tokens are:', [str(x[0]) for x in word_counts.most_common(10)])
+
+# Assign a unique number to each of the 1000 most common tokens
+common_words = [ str(x[0]) for x in word_counts.most_common(1000) ]
+
+#Create the dictionary 'vocab_dict'. Each key is a token and each value is its unique number.
+vocab_dict = dict((item, i) for i, item in enumerate(common_words))
+
+#Convert each email into it's own vocab_dict of shape (1000, 1) containing only 0s and 1s.
+def email2VocabIndices(raw_email, vocab_dict):
+    """
+    Function that takes in a raw email and returns a list of indices corresponding
+    to the location in vocab_dict for each stemmed word in the email.
+    """
+    tokenlist = email2TokenList(raw_email) #simplify raw email
+    index_list = [ vocab_dict[token] for token in tokenlist if token in vocab_dict ] #return list of indeces
+    #print(index_list) #
+    return index_list
+
+def email2FeatureVector( raw_email, vocab_dict ):
+    """
+    Function that takes as input a raw email, and returns the dictionary described above. 
+    If the e-mail has three words whose indices in the vocab_dict are 3, 9, and 14, then the 3rd, 9th, and 14th 
+    element of the vector will be 1's while the other 997 elements in the vector will be 0's (http://blog.davidkaleko.com/svm-email-filter-implementation.html).
+    """
+    n = len(vocab_dict) #1000
+    result = np.zeros((n,1))
+    vocab_indices = email2VocabIndices( raw_email, vocab_dict )
+    for idx in vocab_indices:
+        result[idx] = 1
+    
+    #print(n, result)
+    return result
+
+
+# 4 Create a training, cross-validation, and test set ------------------
+'''
+Redo this section using sklearn's traintestsplit function
+'''
+
+#Build the training X matrices
+n_nonspam_train = int(len(nonspam_emails)*0.6) #1530 for my data
+n_spam_train    = int(len(spam_emails)   *0.6) #300 for my data
+
+#These are the SVM-readable lists for the training set
+nonspam_train = [email2FeatureVector( x, vocab_dict ) for x in nonspam_emails[:n_nonspam_train]]
+spam_train    = [email2FeatureVector( x, vocab_dict ) for x in spam_emails   [:n_spam_train   ]]
+
+#Concat and transpose spam and nonspam feature lists for X matrix training set. 
+Xtrain = np.concatenate(nonspam_train + spam_train,axis=1).T
+
+#Concat a list of zeros of len(n_nonspam_train) and ones of len(n_spam_train) for y vector.
+ytrain = np.concatenate(
+    (np.zeros((n_nonspam_train,1)),
+     np.ones((n_spam_train,1))
+    ), axis=0)
+
+#Build the Cross-Validation X matrix and y vector
+n_nonspam_cv = int(len(nonspam_emails)*0.2)
+n_spam_cv    = int(len(spam_emails)   *0.2)
+
+nonspam_cv = [email2FeatureVector( x, vocab_dict ) 
+                 for x in nonspam_emails[n_nonspam_train:n_nonspam_train+n_nonspam_cv]]
+spam_cv    = [email2FeatureVector( x, vocab_dict ) 
+                 for x in spam_emails   [n_spam_train:n_spam_train+n_spam_cv         ]]
+
+Xcv = np.concatenate(nonspam_cv+spam_cv,axis=1).T
+ycv = np.concatenate(
+    (np.zeros((n_nonspam_cv,1)),
+     np.ones((n_spam_cv,1))
+    ), axis=0)
+
+#Build the test X matrix and y vector
+n_nonspam_test = len(nonspam_emails) - n_nonspam_train - n_nonspam_cv
+n_spam_test    = len(spam_emails)    - n_spam_train - n_spam_cv
+
+nonspam_test = [email2FeatureVector( x, vocab_dict ) 
+                 for x in nonspam_emails[-n_nonspam_test:]]
+spam_test    = [email2FeatureVector( x, vocab_dict ) 
+                 for x in spam_emails   [-n_spam_test:   ]]
+
+Xtest = np.concatenate(nonspam_test+spam_test,axis=1).T
+ytest = np.concatenate(
+    (np.zeros((n_nonspam_test,1)),
+     np.ones((n_spam_test,1))
+    ), axis=0)
+
+
+# 5 Estimate the C value which best minimizes our SVM linear kernel cost function
+myCs = [0.0001, 0.001, 0.01, 0.1, 1.0, 10.0]
+myErrors = []
+myErrors_train = []
+
+#Evaluate errors for each C value in myCs
+for myC in myCs:
+    
+    # Make an SVM with C=myC and 'linear' kernel
+    linear_svm = svm.SVC(C=myC, kernel='linear')
+
+    # Fit the SVM to our Xtrain matrix, given the labels ytrain
+    linear_svm.fit(Xtrain, ytrain.flatten())
+    
+    # Determine the error on the cross validation set
+    cv_predictions = linear_svm.predict(Xcv).reshape((ycv.shape[0],1))
+    cv_error = 100. * float(sum(cv_predictions != ycv))/ycv.shape[0]
+    myErrors.append(cv_error)
+
+    # Determine the error on the training set
+    train_predictions = linear_svm.predict(Xtrain).reshape((ytrain.shape[0],1))
+    train_error = 100. * float(sum(train_predictions != ytrain))/ytrain.shape[0]
+    myErrors_train.append( train_error )
+
+#Graph how different C values affect training and CV classification errors
+plt.figure(figsize=(8,5))
+plt.plot(myCs,myErrors,'ro--',label='CV Set Error')
+plt.plot(myCs,myErrors_train,'bo--',label='Training Set Error')
+plt.grid(True,'both')
+plt.xlabel('$C$ Value',fontsize=16)
+plt.ylabel('Classification Error [%]',fontsize=14)
+plt.title('Choosing a $C$ Value',fontsize=18)
+plt.xscale('log')
+myleg = plt.legend()
+plt.show()
+
+#Estimate the best C value between CV and Test datasets
+smallest_C_cv = myErrors.index(min(myErrors, key=int))
+smallest_C_test = myErrors_train.index(min(myErrors_train, key=int))
+
+smallest_C = myCs[int((smallest_C_cv + smallest_C_test) / 2)]
+
+# 6 Compute test predictions  ------------
+best_svm = svm.SVC(C=smallest_C, kernel='linear')
+best_svm.fit(Xtrain, ytrain.flatten())
+
+# Test SVM prediction on Xtest dataset and reshape
+test_predictions = best_svm.predict(Xtest).reshape((ytest.shape[0],1))
+test_acc = 100. * float(sum(test_predictions == ytest))/ytest.shape[0]
+
+#Print how accurately we classify spam and nonspam emails
+print('Test set accuracy = %0.2f%%' % test_acc) 
+
+'''
+Add additional evaluation metrics
+'''
+
+#This script is based on David Kaleko's code, which you can find here: http://blog.davidkaleko.com/svm-email-filter-implementation.html

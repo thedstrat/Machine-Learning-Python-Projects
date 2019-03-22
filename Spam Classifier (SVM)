@@ -148,9 +148,7 @@ def email2FeatureVector( raw_email, vocab_dict ):
 
 
 # 4 Create a training, cross-validation, and test set ------------------
-'''
-Redo this section using sklearn's traintestsplit function
-'''
+#Redo this section using sklearn's traintestsplit function
 
 #Build the training X matrices
 n_nonspam_train = int(len(nonspam_emails)*0.6) #1530 for my data
@@ -201,7 +199,7 @@ ytest = np.concatenate(
 
 
 # 5 Estimate the C value which best minimizes our SVM linear kernel cost function
-myCs = [0.0001, 0.001, 0.01, 0.1, 1.0, 10.0]
+myCs = [0.0001, 0.001, 0.01, 0.1, 1.0, 10.0] #A few potential C values to test
 myErrors = []
 myErrors_train = []
 
@@ -224,7 +222,7 @@ for myC in myCs:
     train_error = 100. * float(sum(train_predictions != ytrain))/ytrain.shape[0]
     myErrors_train.append( train_error )
 
-#Graph how different C values affect training and CV classification errors
+#Graph how different C values affect our training/cv dataset classification errors
 plt.figure(figsize=(8,5))
 plt.plot(myCs,myErrors,'ro--',label='CV Set Error')
 plt.plot(myCs,myErrors_train,'bo--',label='Training Set Error')
@@ -237,24 +235,30 @@ myleg = plt.legend()
 plt.show()
 
 #Estimate the best C value between CV and Test datasets
-C_values = [k + l for k, l in zip(myErrors, myErrors_train)] #sum together lists
-smallest_C = C_values.index(min(C_values, key=int)) #find index of min value
+smallest_C_cv = myErrors.index(min(myErrors, key=int))
+smallest_C_test = myErrors_train.index(min(myErrors_train, key=int))
 
-smallest_C = myCs[int(smallest_C)] #find C value at the lowest index
+smallest_C = myCs[int((smallest_C_cv + smallest_C_test) / 2)]
 
-# 6 Compute test predictions  ------------
+# 6 Compute test predictions and evaluation metrics ------------
 best_svm = svm.SVC(C=smallest_C, kernel='linear')
 best_svm.fit(Xtrain, ytrain.flatten())
 
 # Test SVM prediction on Xtest dataset and reshape
+from sklearn.metrics import accuracy_score
+from sklearn.metrics import confusion_matrix
+from sklearn.metrics import classification_report
+
 test_predictions = best_svm.predict(Xtest).reshape((ytest.shape[0],1))
 test_acc = 100. * float(sum(test_predictions == ytest))/ytest.shape[0]
 
-#Print how accurately we classify spam and nonspam emails
-print('Test set accuracy = %0.2f%%' % test_acc) 
+print('Test Set Accuracy = %0.2f%%' % test_acc) 
 
-'''
-Add additional evaluation metrics
-'''
+print("Test set Confusion Matrix:", confusion_matrix(ytest, test_predictions))
+#print(confusion_matrix(iris_class_test, predicted))  
+
+print("Test Set Classification Report:", classification_report(ytest, test_predictions))
+#print(classification_report(Xtest, test_predictions)) 
+
 
 #This script is based on David Kaleko's code, which you can find here: http://blog.davidkaleko.com/svm-email-filter-implementation.html

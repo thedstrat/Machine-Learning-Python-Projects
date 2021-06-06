@@ -1,3 +1,5 @@
+This project creates a timeline of daily sentiment on the r/Cryptocurrency subreddit using Google's Natural Language Processing API.
+
 To analyze sentiment using these files:
 1. Create a VM in Google Cloud Platform
 2. Create a virtual env, install dependencies, and run Sentiment-VM.py in the VM. This will read the Reddit RSS Feed from new posts in r/cryptocurrency and save as JSON to your bucket (replace 'reddit-data-bucket-jdxqd-2'). After the JSON is upload to the bucket, it will run entity analysis on it using GCP's NLP API, and save the output to the bucket as a txt file.

@@ -1,0 +1,202 @@
+{
+  "nbformat": 4,
+  "nbformat_minor": 0,
+  "metadata": {
+    "colab": {
+      "provenance": []
+    },
+    "kernelspec": {
+      "name": "python3",
+      "display_name": "Python 3"
+    },
+    "language_info": {
+      "name": "python"
+    }
+  },
+  "cells": [
+    {
+      "cell_type": "code",
+      "source": [
+        "!pip install langchain\n",
+        "!pip install openai\n",
+        "!pip install chromadb\n",
+        "!pip install tiktoken"
+      ],
+      "metadata": {
+        "id": "hQI0UpMvlnlF"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "execution_count": 87,
+      "metadata": {
+        "id": "aUL3enmhleuD"
+      },
+      "outputs": [],
+      "source": [
+        "from langchain.embeddings.openai import OpenAIEmbeddings\n",
+        "from langchain.text_splitter import CharacterTextSplitter\n",
+        "from langchain.vectorstores import Chroma\n",
+        "from langchain.document_loaders import TextLoader\n",
+        "from langchain.callbacks import get_openai_callback\n",
+        "import os\n",
+        "from langchain.llms import OpenAI\n",
+        "from langchain.chains.qa_with_sources import load_qa_with_sources_chain"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "os.environ[\"OPENAI_API_KEY\"] = ''"
+      ],
+      "metadata": {
+        "id": "_JTk52rPl38H"
+      },
+      "execution_count": 88,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "#Split the text into chunks and create embeddings for each\n",
+        "loader = TextLoader('/content/sample_data/CSP.txt')\n",
+        "documents = loader.load()\n",
+        "text_splitter = CharacterTextSplitter(chunk_size=1000, chunk_overlap=0)\n",
+        "docs = text_splitter.split_documents(documents)\n",
+        "\n",
+        "with get_openai_callback() as cb:\n",
+        "    embeddings = OpenAIEmbeddings()\n",
+        "    print(cb)\n"
+      ],
+      "metadata": {
+        "id": "EiRAc3A8Bq5K"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "#Find similar piece of text using the chromadb vectorstore database\n",
+        "with get_openai_callback() as cb:\n",
+        "    db = Chroma.from_documents(docs, embeddings)\n",
+        "    query = \"What are JBPH-H ROM Procedures?\"\n",
+        "    docs = db.similarity_search(query)\n",
+        "    print(cb)"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "QLpTcB4JP8X3",
+        "outputId": "220d45c2-36a9-4480-d828-d1c612745775"
+      },
+      "execution_count": 90,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stderr",
+          "text": [
+            "WARNING:chromadb:Using embedded DuckDB without persistence: data will be transient\n"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Tokens Used: 0\n",
+            "\tPrompt Tokens: 0\n",
+            "\tCompletion Tokens: 0\n",
+            "Successful Requests: 0\n",
+            "Total Cost (USD): $0.0\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "print(docs[:3])"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "ejrwd9hjCNtD",
+        "outputId": "0105e72f-2e74-4590-c209-2a73c4440b47"
+      },
+      "execution_count": 91,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "[Document(page_content='If a ROM (Restriction of Movement) is required from your unit in conjunction with your PCS,\\xa0a completed ROM letter (template attached) is required for reimbursement of those 14 days.\"\\t\\t\\t\\t633 CPTS\\tACC\\t\\t\\t\\t\\t\\t\\nPCS Out Processing\\t\"If you are PCSing from JBLE and within 10 days of your departure date, please create an inquiry within CSP, attach a copy of your orders and annotate your Final Out date with MPF.\\n\\n\\nIf you are looking for an advance, please make sure you head to eFinance and complete your pay, DLA, or PPM advance online there.\\xa0 Guide to file the advance is attached.\\n\\n\\nYour request should be processed within 3 duty days from receipt.\"\\t\\t\\t\\t633 CPTS\\tACC\\t\\t\\t\\t\\t\\t\\nUpdating BAH\\t\"In order to update your BAH please complete the attached 594 and follow the \"\"How-to\"\" instructions.', metadata={'source': '/content/sample_data/CSP.txt'}), Document(page_content='\"\\t\\t\\t\\t81 CPTS\\tAETC\\t\\t\\t\\t\\t\\t\\nJBPH-H ROM Procedures\\tJBPH-H ROM procedures.\\t\\t\\t\\t15 CPTS\\tPACAF\\t\\t\\t\\t\\t\\t\\nJan LES-Inaccurate leave/use lose balance\\t\"From DFAS…\\n\\xa0\\n“I believe you are already aware, but the use or lose leave balance for all DJMS-AC members was overstated on January LESs.\\xa0 The fix for future month LESs is in process, and IT is working to correct the programming error for January and send corrected January LESs.\\xa0 SmartDocs will be sent to affected members this week.\\xa0 Also, a message will be posted on the myPay homepage today.\\n\\xa0\\nThe root cause was a programming error when updating DJMS for the new W-4 form.”\\n\\xa0\"\\t\\t\\t\\t72 CPTS\\tAFMC\\t\\t\\t\\t\\t\\t\\nDTS SAVs and Monthly Training\\t\"Good afternoon,', metadata={'source': '/content/sample_data/CSP.txt'}), Document(page_content='\"\\t\\t\\t\\tALL\\tALL\\t\\t\\t\\t\\t\\t\\nLeave Restoration for Leave Charged During Restriction of Movement (ROM)\\t\"Per DoD Memorandum, “Force Health Protection Guidance (Supplement 12) – Department of Defense Guidance for Personnel Traveling During the Coronavirus Disease 2019 Pandemic,” dated 6 Aug 2020, the ROM location will be considered as the official duty location. As such, leave will not be charged while in ROM, to include quarantine and self-isolation. Consequently, retroactive to 6 August 2020, subject DAF personnel charged leave during ROM may have their leave restored following guidelines prescribed by the Air Force Accounting and Finance Office (attached). Only the actual time in ROM is non-chargeable; the day the member is released is a chargeable day of leave, as they are no longer restricted.', metadata={'source': '/content/sample_data/CSP.txt'})]\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "#Takes the most likely snippets of text (doc variable) and inputs them into gpt3.5-turbo along with the question.\n",
+        "with get_openai_callback() as cb:\n",
+        "  chain = load_qa_with_sources_chain(OpenAI(model_name=\"gpt-3.5-turbo\"), chain_type=\"stuff\")\n",
+        "  query = \"What are JBPH-H ROM Procedures?\"\n",
+        "  chain({\"input_documents\": docs, \"question\": query}, return_only_outputs=True)\n",
+        "  print(cb)"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "amiyxV9nRtkg",
+        "outputId": "7bba29a0-bb7c-4c2e-f360-61c6ad2dbc3f"
+      },
+      "execution_count": 96,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Tokens Used: 2238\n",
+            "\tPrompt Tokens: 2147\n",
+            "\tCompletion Tokens: 91\n",
+            "Successful Requests: 1\n",
+            "Total Cost (USD): $0.004476\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "chain = load_qa_with_sources_chain(OpenAI(model_name=\"gpt-3.5-turbo\"), chain_type=\"stuff\")\n",
+        "query = \"What are JBPH-H ROM Procedures?\"\n",
+        "chain({\"input_documents\": docs, \"question\": query}, return_only_outputs=True)"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "epZoiX71Z-Ve",
+        "outputId": "749c4b8c-903f-48e6-9c70-575f996a1d3c"
+      },
+      "execution_count": 92,
+      "outputs": [
+        {
+          "output_type": "execute_result",
+          "data": {
+            "text/plain": [
+              "{'output_text': 'JBPH-H ROM Procedures are procedures related to ROM (Restriction of Movement) required in conjunction with PCS. It refers to submitting a completed ROM letter for reimbursement of 14 days of ROM. Leave charges during ROM can be restored following guidelines prescribed by the Air Force Accounting and Finance Office. No information regarding the specific steps of JBPH-H ROM procedures is provided in the given content excerpts.\\nSOURCES: /content/sample_data/CSP.txt'}"
+            ]
+          },
+          "metadata": {},
+          "execution_count": 92
+        }
+      ]
+    }
+  ]
+}
